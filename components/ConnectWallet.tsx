@@ -61,7 +61,7 @@ export function ConnectWallet() {
                         </div>
 
                         <p className="text-gray-500 text-xs text-center">
-                            Make sure you're on <strong className="text-white">Base Sepolia</strong> network
+                            Make sure you&apos;re on <strong className="text-white">Base Sepolia</strong> network
                         </p>
                     </div>
                 </div>

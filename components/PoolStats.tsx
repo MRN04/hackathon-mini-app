@@ -14,7 +14,7 @@ export function PoolStats() {
         address: PRIVACY_POOL_ZK_ADDRESS as `0x${string}`,
         abi: PRIVACY_POOL_ZK_ABI,
         functionName: "getBalance",
-    });
+    }) as { data: bigint | undefined };
 
     return (
         <div className="grid grid-cols-2 gap-4 mb-6">

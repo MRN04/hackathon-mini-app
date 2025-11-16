@@ -13,15 +13,22 @@ import { ImportSecret } from "@/components/ImportSecret";
 const RELAYER_URL =
     process.env.NEXT_PUBLIC_RELAYER_URL || "http://localhost:3001";
 
+interface StoredSecret {
+    secret: string;
+    commitment: string;
+    nullifier: string;
+    timestamp: number;
+}
+
 export function WithdrawFormZK() {
     const { address } = useAccount();
-    const [selectedSecret, setSelectedSecret] = useState<any>(null);
+    const [selectedSecret, setSelectedSecret] = useState<StoredSecret | null>(null);
     const [recipientAddress, setRecipientAddress] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [isGeneratingProof, setIsGeneratingProof] = useState(false);
     const [txHash, setTxHash] = useState("");
     const [error, setError] = useState("");
-    const [secrets, setSecrets] = useState<any[]>([]);
+    const [secrets, setSecrets] = useState<StoredSecret[]>([]);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Оновлюємо список секретів при монтуванні та при зміні refreshTrigger
@@ -99,9 +106,9 @@ export function WithdrawFormZK() {
             } else {
                 throw new Error(data.error || "Withdrawal failed");
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Withdrawal error:", err);
-            setError(err.message || "Failed to process withdrawal");
+            setError(err instanceof Error ? err.message : "Failed to process withdrawal");
         } finally {
             setIsProcessing(false);
             setIsGeneratingProof(false);
@@ -137,7 +144,7 @@ export function WithdrawFormZK() {
                             ⚠️ No deposits found. Make a deposit first!
                         </p>
                         <p className="text-xs text-gray-400">
-                            If you made a deposit but don't see it here, you can import your secret manually below.
+                            If you made a deposit but don&apos;t see it here, you can import your secret manually below.
                         </p>
                     </div>
                     <ImportSecret onImportSuccess={() => setRefreshTrigger((prev) => prev + 1)} />

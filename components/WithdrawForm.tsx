@@ -5,9 +5,16 @@ import { getStoredSecrets, formatCommitment } from "@/lib/privacy";
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_RELAYER_URL || "http://localhost:3001";
 
+interface StoredSecret {
+    secret: string;
+    commitment: string;
+    nullifier: string;
+    timestamp: number;
+}
+
 export function WithdrawForm() {
     const { address } = useAccount();
-    const [selectedSecret, setSelectedSecret] = useState<any>(null);
+    const [selectedSecret, setSelectedSecret] = useState<StoredSecret | null>(null);
     const [recipientAddress, setRecipientAddress] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [txHash, setTxHash] = useState("");
@@ -50,9 +57,9 @@ export function WithdrawForm() {
             } else {
                 throw new Error(data.error || "Withdrawal failed");
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Withdrawal error:", err);
-            setError(err.message || "Failed to process withdrawal");
+            setError(err instanceof Error ? err.message : "Failed to process withdrawal");
         } finally {
             setIsProcessing(false);
         }
@@ -81,7 +88,7 @@ export function WithdrawForm() {
                             value={selectedSecret?.commitment || ""}
                             onChange={(e) => {
                                 const secret = secrets.find((s) => s.commitment === e.target.value);
-                                setSelectedSecret(secret);
+                                setSelectedSecret(secret || null);
                                 if (secret) {
                                     setRecipientAddress(address || "");
                                 }
@@ -168,7 +175,7 @@ export function WithdrawForm() {
             {/* Info */}
             <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                 <p className="text-blue-400 text-xs">
-                    💡 Withdrawal is processed by a relayer - your withdrawal address won't be linked to your deposit!
+                    💡 Withdrawal is processed by a relayer - your withdrawal address won&apos;t be linked to your deposit!
                 </p>
             </div>
         </div>

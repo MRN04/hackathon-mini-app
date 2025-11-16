@@ -2,7 +2,7 @@
  * Privacy utilities for generating commitments and secrets
  */
 
-import { keccak256, toBytes, toHex, hexToBytes } from "viem";
+import { keccak256, toHex, hexToBytes } from "viem";
 
 /**
  * Генерує випадковий secret (32 bytes)

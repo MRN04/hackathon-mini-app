@@ -133,7 +133,7 @@ export function DepositForm() {
                         ✅ Deposit saved automatically!
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                        Check the Withdraw form below - it's already there!
+                        Check the Withdraw form below - it&apos;s already there!
                     </p>
                 </div>
             )}
