@@ -42,8 +42,8 @@ export default function RootLayout({
 }>) {
   return (
     <RootProvider>
-      <html lang="en">
-        <body className={`${inter.variable} ${sourceCodePro.variable}`}>
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${inter.variable} ${sourceCodePro.variable}`} suppressHydrationWarning>
           <SafeArea>{children}</SafeArea>
         </body>
       </html>

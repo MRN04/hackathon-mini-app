@@ -1,0 +1,16 @@
+# Powers of Tau files (дуже великі ~20MB+)
+*.ptau
+
+# Node modules
+node_modules/
+
+# Compiled outputs (можуть бути перегенеровані)
+*.r1cs
+*.sym
+
+# Можна закомітити для production:
+# withdraw.wasm
+# withdraw_0000.zkey
+# Verifier.sol
+# verification_key.json
+
