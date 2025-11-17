@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSignMessage } from "wagmi";
 import { parseEther } from "viem";
 import {
     generateSecret,
@@ -14,7 +14,8 @@ import {
 } from "@/lib/contract-zk";
 
 export function DepositForm() {
-    const { isConnected } = useAccount();
+    const { isConnected, address } = useAccount();
+    const { signMessageAsync } = useSignMessage();
     const [secret, setSecret] = useState<string>("");
     const [commitment, setCommitment] = useState<string>("");
     const [isGenerating, setIsGenerating] = useState(false);
@@ -35,16 +36,10 @@ export function DepositForm() {
             console.log("Secret:", newSecret);
             console.log("Commitment:", newCommitment);
 
-            // ЗБЕРІГАЄМО ОДРАЗУ після генерації!
-            saveSecret(newSecret, newCommitment);
-            console.log("✅ Saved immediately after generation!");
-
             setSecret(newSecret);
             setCommitment(newCommitment);
-            setSavedSuccessfully(true);
 
-            //Ховаємо повідомлення через 3 секунди
-            setTimeout(() => setSavedSuccessfully(false), 3000);
+            console.log("⏳ Commitment generated. Will save after successful deposit transaction.");
         } catch (err) {
             console.error("Error generating commitment:", err);
             alert("❌ Failed to generate commitment!");
@@ -75,19 +70,36 @@ export function DepositForm() {
         }
     };
 
-    // Очищуємо форму після успішного депозиту
+    // Зберігаємо депозит після успішної транзакції
     useEffect(() => {
-        if (isSuccess) {
-            console.log("✅ Транзакція підтверджена!");
-            alert("✅ Deposit successful! Your secret was saved automatically.");
+        const handleSuccessfulDeposit = async () => {
+            if (isSuccess && secret && commitment && address) {
+                console.log("✅ Транзакція підтверджена! Зберігаємо депозит...");
 
-            // Очищуємо форму через 2 секунди
-            setTimeout(() => {
-                setSecret("");
-                setCommitment("");
-            }, 2000);
-        }
-    }, [isSuccess]);
+                try {
+                    // Зберігаємо зашифрований депозит
+                    await saveSecret(secret, commitment, address, async (msg) => {
+                        return await signMessageAsync({ message: msg });
+                    });
+
+                    setSavedSuccessfully(true);
+                    alert("✅ Deposit successful! Your secret was encrypted and saved automatically.");
+
+                    // Очищуємо форму через 3 секунди
+                    setTimeout(() => {
+                        setSecret("");
+                        setCommitment("");
+                        setSavedSuccessfully(false);
+                    }, 3000);
+                } catch (err) {
+                    console.error("❌ Failed to save secret:", err);
+                    alert("⚠️ Deposit successful but failed to save secret! Please save your secret manually:\n\n" + secret);
+                }
+            }
+        };
+
+        handleSuccessfulDeposit();
+    }, [isSuccess, secret, commitment, address, signMessageAsync]);
 
     return (
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6 mb-6">
@@ -102,26 +114,11 @@ export function DepositForm() {
                             <p className="text-gray-400 text-xs mb-2">Your Commitment</p>
                             <p className="text-white font-mono text-sm break-all">{commitment}</p>
                         </div>
-                        <div className="ml-2 px-2 py-1 bg-green-500/30 border border-green-500/50 rounded text-xs text-green-300 whitespace-nowrap font-semibold">
-                            ✓ Saved
-                        </div>
                     </div>
-                    <p className="text-green-400 text-xs mt-2 font-semibold">
-                        ✅ Already saved! Ready to deposit.
-                    </p>
                     {secret && (
                         <div className="mt-3 pt-3 border-t border-gray-600">
                             <p className="text-gray-400 text-xs mb-1">Secret (for backup):</p>
                             <p className="text-white font-mono text-xs break-all">{secret}</p>
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(`Secret: ${secret}\nCommitment: ${commitment}`);
-                                    alert("📋 Copied to clipboard!");
-                                }}
-                                className="mt-2 text-xs text-blue-400 hover:text-blue-300"
-                            >
-                                📋 Copy backup (optional)
-                            </button>
                         </div>
                     )}
                 </div>

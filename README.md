@@ -8,7 +8,8 @@ A decentralized exchange that breaks the on-chain link between depositor and rec
 
 **Key Features:**
 
-- ✅ Automated secret storage (localStorage)
+- ✅ **Encrypted storage** with wallet signature
+- ✅ Deposits saved **after transaction confirmation**
 - ✅ ZK proof generation in browser
 - ✅ Relayer-based withdrawals for complete privacy
 - ✅ Deployed on Base Sepolia testnet
@@ -48,6 +49,27 @@ node server-zk.js
 **Smart Contracts**: Solidity, Circom, Groth16  
 **Backend**: Express.js, Viem  
 **Blockchain**: Base Sepolia (testnet)
+
+## 🔒 Security Features
+
+### Encrypted Storage
+
+- All deposit secrets are encrypted using **AES-256** with a key derived from your wallet signature
+- Only the wallet owner can decrypt and access their deposits
+- Storage is local-first - your secrets never leave your device unencrypted
+
+### Transaction Flow
+
+1. **Generate commitment** → Creates secret locally
+2. **Deposit** → Sends transaction to blockchain
+3. **After confirmation** → Encrypts and saves secret automatically
+4. **Withdraw** → Sign message to decrypt, generate ZK proof, send via relayer
+
+### Privacy Guarantees
+
+- Deposits and withdrawals are unlinkable on-chain
+- Relayer hides your IP address and wallet from the contract
+- ZK proofs prove knowledge without revealing secrets
 
 ---
 

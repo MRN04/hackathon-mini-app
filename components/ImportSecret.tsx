@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useAccount, useSignMessage } from "wagmi";
 import { saveSecret } from "@/lib/privacy";
 
 interface ImportSecretProps {
@@ -7,16 +8,25 @@ interface ImportSecretProps {
 }
 
 export function ImportSecret({ onImportSuccess }: ImportSecretProps) {
+    const { address } = useAccount();
+    const { signMessageAsync } = useSignMessage();
     const [isOpen, setIsOpen] = useState(false);
     const [secret, setSecret] = useState("");
     const [commitment, setCommitment] = useState("");
+    const [isImporting, setIsImporting] = useState(false);
 
-    const handleImport = () => {
+    const handleImport = async () => {
         if (!secret || !commitment) {
             alert("Please enter both secret and commitment");
             return;
         }
 
+        if (!address) {
+            alert("Please connect your wallet first");
+            return;
+        }
+
+        setIsImporting(true);
         try {
             // Перевірка формату
             if (!secret.startsWith("0x") || !commitment.startsWith("0x")) {
@@ -24,8 +34,12 @@ export function ImportSecret({ onImportSuccess }: ImportSecretProps) {
                 return;
             }
 
-            saveSecret(secret, commitment);
-            alert("✅ Secret imported successfully!");
+            // Зберігаємо з шифруванням
+            await saveSecret(secret, commitment, address, async (msg) => {
+                return await signMessageAsync({ message: msg });
+            });
+
+            alert("✅ Secret imported and encrypted successfully!");
             setSecret("");
             setCommitment("");
             setIsOpen(false);
@@ -36,7 +50,9 @@ export function ImportSecret({ onImportSuccess }: ImportSecretProps) {
             }
         } catch (err) {
             console.error("Error importing secret:", err);
-            alert("❌ Failed to import secret");
+            alert("❌ Failed to import secret: " + (err instanceof Error ? err.message : "Unknown error"));
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -92,13 +108,14 @@ export function ImportSecret({ onImportSuccess }: ImportSecretProps) {
 
                 <button
                     onClick={handleImport}
-                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 rounded text-sm"
+                    disabled={isImporting}
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-2 rounded text-sm"
                 >
-                    Import Secret
+                    {isImporting ? "🔐 Encrypting..." : "Import Secret"}
                 </button>
 
                 <p className="text-xs text-gray-500">
-                    ⚠️ Use this if automatic save failed after deposit
+                    ⚠️ Use this if automatic save failed after deposit. Will be encrypted with your wallet signature.
                 </p>
             </div>
         </div>

@@ -1,8 +1,51 @@
 /**
  * Privacy utilities for generating commitments and secrets
+ * With encrypted storage using wallet signature
  */
 
 import { keccak256, toHex, hexToBytes } from "viem";
+import CryptoJS from "crypto-js";
+
+// Кеш для encryption key (щоб не просити підпис кожен раз)
+let encryptionKeyCache: { address: string; key: string } | null = null;
+
+/**
+ * Отримує ключ шифрування з підпису гаманця
+ */
+export async function getEncryptionKey(
+  address: string,
+  signMessage: (message: string) => Promise<string>
+): Promise<string> {
+  // Перевіряємо кеш
+  if (encryptionKeyCache && encryptionKeyCache.address === address) {
+    return encryptionKeyCache.key;
+  }
+
+  // Просимо користувача підписати повідомлення
+  const message = `Sign this message to encrypt your PrivateDEX deposits.\n\nAddress: ${address}\n\nThis signature will be used to generate an encryption key for your local storage.`;
+
+  try {
+    const signature = await signMessage(message);
+
+    // Генеруємо ключ з підпису
+    const key = keccak256(hexToBytes(signature as `0x${string}`));
+
+    // Зберігаємо в кеш
+    encryptionKeyCache = { address, key };
+
+    return key;
+  } catch (error) {
+    console.error("Failed to get encryption key:", error);
+    throw new Error("User rejected signature request");
+  }
+}
+
+/**
+ * Очищує кеш encryption key (наприклад, при відключенні гаманця)
+ */
+export function clearEncryptionKeyCache() {
+  encryptionKeyCache = null;
+}
 
 /**
  * Генерує випадковий secret (32 bytes)
@@ -31,49 +74,91 @@ export function generateNullifier(secret: string): string {
 }
 
 /**
- * Зберігає secret в localStorage (для MVP)
- * ⚠️ В production використовуйте безпечніше сховище!
+ * Зберігає secret в localStorage з шифруванням
  */
-export function saveSecret(secret: string, commitment: string) {
-  console.log("📝 saveSecret called with:", { secret, commitment });
+export async function saveSecret(
+  secret: string,
+  commitment: string,
+  address: string,
+  signMessage: (message: string) => Promise<string>
+) {
+  console.log("📝 saveSecret called with:", { commitment, address });
 
-  const existingSecrets = getStoredSecrets();
-  console.log("📦 Existing secrets count:", existingSecrets.length);
+  try {
+    // Отримуємо ключ шифрування
+    const encryptionKey = await getEncryptionKey(address, signMessage);
 
-  const newEntry = {
-    secret,
-    commitment,
-    nullifier: generateNullifier(secret),
-    timestamp: Date.now(),
-  };
-  console.log("➕ Adding new entry:", newEntry);
+    // Завантажуємо існуючі секрети
+    const existingSecrets = await getStoredSecrets(address, signMessage);
+    console.log("📦 Existing secrets count:", existingSecrets.length);
 
-  existingSecrets.push(newEntry);
+    const newEntry = {
+      secret,
+      commitment,
+      nullifier: generateNullifier(secret),
+      timestamp: Date.now(),
+    };
+    console.log("➕ Adding new entry (will be encrypted)");
 
-  const jsonString = JSON.stringify(existingSecrets);
-  console.log("💾 Saving to localStorage:", jsonString);
+    existingSecrets.push(newEntry);
 
-  localStorage.setItem("privacy-secrets", jsonString);
+    // Шифруємо дані
+    const jsonString = JSON.stringify(existingSecrets);
+    const encrypted = CryptoJS.AES.encrypt(
+      jsonString,
+      encryptionKey
+    ).toString();
 
-  // Перевірка що збереглося
-  const verification = localStorage.getItem("privacy-secrets");
-  console.log("✅ Verification - stored value:", verification);
-  console.log("✅ New secrets count:", existingSecrets.length);
+    // Зберігаємо зашифровані дані
+    const storageKey = `privacy-secrets-${address.toLowerCase()}`;
+    localStorage.setItem(storageKey, encrypted);
+
+    console.log("✅ Encrypted and saved successfully");
+    console.log("✅ New secrets count:", existingSecrets.length);
+  } catch (error) {
+    console.error("❌ Failed to save secret:", error);
+    throw error;
+  }
 }
 
 /**
- * Отримує всі збережені secrets
+ * Отримує всі збережені secrets (розшифровує)
  */
-export function getStoredSecrets(): Array<{
-  secret: string;
-  commitment: string;
-  nullifier: string;
-  timestamp: number;
-}> {
+export async function getStoredSecrets(
+  address: string,
+  signMessage: (message: string) => Promise<string>
+): Promise<
+  Array<{
+    secret: string;
+    commitment: string;
+    nullifier: string;
+    timestamp: number;
+  }>
+> {
   try {
-    const stored = localStorage.getItem("privacy-secrets");
-    return stored ? JSON.parse(stored) : [];
-  } catch {
+    const storageKey = `privacy-secrets-${address.toLowerCase()}`;
+    const encrypted = localStorage.getItem(storageKey);
+
+    if (!encrypted) {
+      return [];
+    }
+
+    // Отримуємо ключ шифрування
+    const encryptionKey = await getEncryptionKey(address, signMessage);
+
+    // Розшифровуємо
+    const decrypted = CryptoJS.AES.decrypt(encrypted, encryptionKey).toString(
+      CryptoJS.enc.Utf8
+    );
+
+    if (!decrypted) {
+      console.error("Failed to decrypt data");
+      return [];
+    }
+
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error("Failed to get stored secrets:", error);
     return [];
   }
 }
@@ -81,10 +166,30 @@ export function getStoredSecrets(): Array<{
 /**
  * Видаляє secret після successful withdraw
  */
-export function removeSecret(commitment: string) {
-  const secrets = getStoredSecrets();
-  const filtered = secrets.filter((s) => s.commitment !== commitment);
-  localStorage.setItem("privacy-secrets", JSON.stringify(filtered));
+export async function removeSecret(
+  commitment: string,
+  address: string,
+  signMessage: (message: string) => Promise<string>
+) {
+  try {
+    const secrets = await getStoredSecrets(address, signMessage);
+    const filtered = secrets.filter((s) => s.commitment !== commitment);
+
+    // Шифруємо та зберігаємо оновлений список
+    const encryptionKey = await getEncryptionKey(address, signMessage);
+    const encrypted = CryptoJS.AES.encrypt(
+      JSON.stringify(filtered),
+      encryptionKey
+    ).toString();
+
+    const storageKey = `privacy-secrets-${address.toLowerCase()}`;
+    localStorage.setItem(storageKey, encrypted);
+
+    console.log("✅ Secret removed successfully");
+  } catch (error) {
+    console.error("❌ Failed to remove secret:", error);
+    throw error;
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { getStoredSecrets, formatCommitment } from "@/lib/privacy";
 import {
     generateWithdrawProof,
@@ -22,6 +22,7 @@ interface StoredSecret {
 
 export function WithdrawFormZK() {
     const { address } = useAccount();
+    const { signMessageAsync } = useSignMessage();
     const [selectedSecret, setSelectedSecret] = useState<StoredSecret | null>(null);
     const [recipientAddress, setRecipientAddress] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -30,26 +31,54 @@ export function WithdrawFormZK() {
     const [error, setError] = useState("");
     const [secrets, setSecrets] = useState<StoredSecret[]>([]);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [isLoadingSecrets, setIsLoadingSecrets] = useState(false);
 
     // Оновлюємо список секретів при монтуванні та при зміні refreshTrigger
     useEffect(() => {
-        const loadedSecrets = getStoredSecrets();
-        setSecrets(loadedSecrets);
-        console.log("📥 Завантажено депозитів:", loadedSecrets.length);
-    }, [refreshTrigger]);
-
-    // Автоматично оновлюємо кожні 2 секунди (для випадку коли депозит щойно завершився)
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const loadedSecrets = getStoredSecrets();
-            if (loadedSecrets.length !== secrets.length) {
-                setSecrets(loadedSecrets);
-                console.log("🔄 Депозити оновлено автоматично:", loadedSecrets.length);
+        const loadSecrets = async () => {
+            if (!address) {
+                setSecrets([]);
+                return;
             }
-        }, 2000);
+
+            setIsLoadingSecrets(true);
+            try {
+                const loadedSecrets = await getStoredSecrets(address, async (msg) => {
+                    return await signMessageAsync({ message: msg });
+                });
+                setSecrets(loadedSecrets);
+                console.log("📥 Завантажено депозитів:", loadedSecrets.length);
+            } catch (err) {
+                console.error("Failed to load secrets:", err);
+                setSecrets([]);
+            } finally {
+                setIsLoadingSecrets(false);
+            }
+        };
+
+        loadSecrets();
+    }, [refreshTrigger, address, signMessageAsync]);
+
+    // Автоматично оновлюємо кожні 5 секунд (для випадку коли депозит щойно завершився)
+    useEffect(() => {
+        if (!address) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const loadedSecrets = await getStoredSecrets(address, async (msg) => {
+                    return await signMessageAsync({ message: msg });
+                });
+                if (loadedSecrets.length !== secrets.length) {
+                    setSecrets(loadedSecrets);
+                    console.log("🔄 Депозити оновлено автоматично:", loadedSecrets.length);
+                }
+            } catch (err) {
+                // Ігноруємо помилки при автооновленні
+            }
+        }, 5000);
 
         return () => clearInterval(interval);
-    }, [secrets.length]);
+    }, [secrets.length, address, signMessageAsync]);
 
     const handleWithdraw = async () => {
         if (!selectedSecret || !recipientAddress) {
@@ -137,7 +166,16 @@ export function WithdrawFormZK() {
                 )}
             </div>
 
-            {secrets.length === 0 ? (
+            {isLoadingSecrets ? (
+                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-4">
+                    <p className="text-blue-400 text-sm">
+                        🔓 Decrypting your deposits...
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                        Please sign the message to unlock your encrypted data
+                    </p>
+                </div>
+            ) : secrets.length === 0 ? (
                 <>
                     <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-4">
                         <p className="text-yellow-400 text-sm mb-2">
@@ -253,10 +291,13 @@ export function WithdrawFormZK() {
 
                     {/* Info */}
                     <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-400 mb-2">
                             🔐 <strong className="text-white">ZK Proof</strong> proves you know
                             the secret without revealing it. Relayer will send the transaction
                             from their address for complete privacy.
+                        </p>
+                        <p className="text-xs text-gray-400">
+                            🔒 <strong className="text-white">Encrypted Storage:</strong> Your deposits are encrypted using your wallet signature and stored locally.
                         </p>
                     </div>
                 </>
