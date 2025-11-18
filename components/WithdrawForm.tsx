@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { getStoredSecrets, formatCommitment } from "@/lib/privacy";
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_RELAYER_URL || "http://localhost:3001";
@@ -14,13 +14,16 @@ interface StoredSecret {
 
 export function WithdrawForm() {
     const { address } = useAccount();
+    const { signMessageAsync } = useSignMessage();
     const [selectedSecret, setSelectedSecret] = useState<StoredSecret | null>(null);
     const [recipientAddress, setRecipientAddress] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [txHash, setTxHash] = useState("");
     const [error, setError] = useState("");
 
-    const secrets = getStoredSecrets();
+    const secrets = getStoredSecrets(address || "", async (msg) => {
+        return signMessageAsync({ message: msg });
+    });
 
     const handleWithdraw = async () => {
         if (!selectedSecret || !recipientAddress) {
@@ -71,7 +74,7 @@ export function WithdrawForm() {
                 🔓 Private Withdraw
             </h2>
 
-            {secrets.length === 0 ? (
+            {secrets.then((secrets) => secrets.length === 0 ? (
                 <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                     <p className="text-yellow-400 text-sm">
                         ⚠️ No deposits found. Make a deposit first!
@@ -170,7 +173,7 @@ export function WithdrawForm() {
                         </div>
                     )}
                 </>
-            )}
+            ))}
 
             {/* Info */}
             <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">

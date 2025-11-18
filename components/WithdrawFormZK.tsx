@@ -73,7 +73,7 @@ export function WithdrawFormZK() {
                     console.log("🔄 Депозити оновлено автоматично:", loadedSecrets.length);
                 }
             } catch (err) {
-                // Ігноруємо помилки при автооновленні
+                console.error("Failed to load secrets automatically:", err);
             }
         }, 5000);
 
